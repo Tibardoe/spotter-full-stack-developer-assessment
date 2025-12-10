@@ -1,11 +1,5 @@
-import {
-  addMinutes,
-  addHours,
-  format,
-  startOfDay,
-  differenceInMinutes,
-  parseISO,
-} from "date-fns";
+import { addMinutes, format, differenceInMinutes } from "date-fns";
+
 import {
   TripInputs,
   SimulationResult,
@@ -15,6 +9,7 @@ import {
   Location,
   Coordinates,
 } from "../types";
+
 import {
   AVG_SPEED_MPH,
   MAX_DRIVE_CONTINUOUS,
@@ -27,6 +22,7 @@ import {
   CARRIER_NAME,
   TRUCK_NUMBER,
 } from "../constants";
+
 import {
   calculateDistanceMiles,
   getCoordinates,
@@ -37,18 +33,16 @@ interface SimulationState {
   currentTime: Date;
   currentLocation: Coordinates;
   currentLocationName: string;
-  dutyStatus: DutyStatus;
 
-  // Counters (reset daily or as per rules)
-  driveTimeContinuous: number; // Hours
-  driveTimeDaily: number; // Hours
-  onDutyTimeDaily: number; // Hours (includes driving)
+  dutyStatus: DutyStatus;
+  driveTimeContinuous: number;
+  driveTimeDaily: number;
+  onDutyTimeDaily: number;
   dutyWindowStart: Date | null;
 
   cycleUsed: number;
   events: LogEvent[];
 
-  // To track route
   routePath: Coordinates[];
   stops: {
     location: Location;
@@ -62,7 +56,7 @@ export const generateTripLogs = (inputs: TripInputs): SimulationResult => {
   const dropoffCoords = getCoordinates(inputs.dropoffLocation);
 
   const state: SimulationState = {
-    currentTime: parseISO(inputs.startDateTime),
+    currentTime: new Date(inputs.startDateTime),
     currentLocation: startCoords,
     currentLocationName: inputs.currentLocation,
     dutyStatus: DutyStatus.OFF_DUTY,
@@ -72,7 +66,7 @@ export const generateTripLogs = (inputs: TripInputs): SimulationResult => {
     onDutyTimeDaily: 0,
     dutyWindowStart: null,
 
-    cycleUsed: inputs.cycleUsed,
+    cycleUsed: Number(inputs.cycleUsed) || 0,
     events: [],
     routePath: [startCoords],
     stops: [
@@ -83,8 +77,6 @@ export const generateTripLogs = (inputs: TripInputs): SimulationResult => {
     ],
   };
 
-  // 1. Initial State: Assume driver starts fresh or is Off Duty before trip
-  // We'll add a small "On Duty" Pre-trip inspection (15 mins)
   addEvent(
     state,
     DutyStatus.ON_DUTY,
@@ -92,11 +84,8 @@ export const generateTripLogs = (inputs: TripInputs): SimulationResult => {
     state.currentLocationName,
     "Pre-trip Inspection"
   );
-
-  // 2. Drive to Pickup
   simulateDriveLeg(state, pickupCoords, inputs.pickupLocation);
 
-  // 3. Pickup (On Duty)
   addEvent(
     state,
     DutyStatus.ON_DUTY,
@@ -109,10 +98,8 @@ export const generateTripLogs = (inputs: TripInputs): SimulationResult => {
     type: "pickup",
   });
 
-  // 4. Drive to Dropoff
   simulateDriveLeg(state, dropoffCoords, inputs.dropoffLocation);
 
-  // 5. Dropoff (On Duty)
   addEvent(
     state,
     DutyStatus.ON_DUTY,
@@ -125,7 +112,6 @@ export const generateTripLogs = (inputs: TripInputs): SimulationResult => {
     type: "dropoff",
   });
 
-  // 6. Post-trip
   addEvent(
     state,
     DutyStatus.ON_DUTY,
@@ -139,9 +125,8 @@ export const generateTripLogs = (inputs: TripInputs): SimulationResult => {
     0,
     inputs.dropoffLocation,
     "End of Trip"
-  ); // Until end of day
+  );
 
-  // 7. Process Events into Daily Logs
   const logs = processEventsToDailyLogs(state.events, inputs);
 
   return {
@@ -151,46 +136,38 @@ export const generateTripLogs = (inputs: TripInputs): SimulationResult => {
   };
 };
 
-// --- Helper Functions ---
+// ---------------------------------------------------------
+// Driving Simulation
+// ---------------------------------------------------------
 
 const simulateDriveLeg = (
   state: SimulationState,
   destination: Coordinates,
   destName: string
 ) => {
-  const totalDist = calculateDistanceMiles(state.currentLocation, destination);
-  let distRemaining = totalDist;
-  let milesSinceFuel = 0; // Simplified fuel tracking for this leg
+  const totalDistance = calculateDistanceMiles(
+    state.currentLocation,
+    destination
+  );
+  let remaining = totalDistance;
+  let milesSinceFuel = 0;
 
-  while (distRemaining > 0) {
-    // Determine max drive time allowed by various constraints
-
-    // Constraint 1: Distance
-    const timeToDest = distRemaining / AVG_SPEED_MPH;
-
-    // Constraint 2: 8 Hour Break Rule
+  while (remaining > 0) {
+    const timeToDest = remaining / AVG_SPEED_MPH;
     const timeToBreak = MAX_DRIVE_CONTINUOUS - state.driveTimeContinuous;
-
-    // Constraint 3: 11 Hour Daily Limit
     const timeToDailyLimit = MAX_DRIVE_DAILY - state.driveTimeDaily;
 
-    // Constraint 4: 14 Hour Window
-    // If window hasn't started, it starts now.
-    // If it has, calculate time left.
-    // Note: This simulation assumes we can stop driving exactly at the limit.
     let timeToWindowLimit = 14;
     if (state.dutyWindowStart) {
-      const hoursSinceWindowStart =
+      const hoursElapsed =
         differenceInMinutes(state.currentTime, state.dutyWindowStart) / 60;
-      timeToWindowLimit = Math.max(0, WINDOW_DAILY - hoursSinceWindowStart);
+      timeToWindowLimit = Math.max(0, WINDOW_DAILY - hoursElapsed);
     }
 
-    // Constraint 5: Fuel (Every 1000 miles)
-    const milesToFuel = FUEL_INTERVAL_MILES - milesSinceFuel;
-    const timeToFuel = milesToFuel / AVG_SPEED_MPH;
+    const milesLeftForFuel = FUEL_INTERVAL_MILES - milesSinceFuel;
+    const timeToFuel = milesLeftForFuel / AVG_SPEED_MPH;
 
-    // Find the limiting factor
-    const segmentTime = Math.min(
+    const segment = Math.min(
       timeToDest,
       timeToBreak,
       timeToDailyLimit,
@@ -198,64 +175,48 @@ const simulateDriveLeg = (
       timeToFuel
     );
 
-    // Check if we can drive at all
-    if (segmentTime <= 0.01) {
-      // Must take a break or reset cycle
+    if (segment <= 0.01) {
       handleForcedStop(state);
       continue;
     }
 
-    // Execute Drive Segment
-    const milesDriven = segmentTime * AVG_SPEED_MPH;
+    const milesDriven = segment * AVG_SPEED_MPH;
     addEvent(
       state,
       DutyStatus.DRIVING,
-      segmentTime,
+      segment,
       "Highway",
       "Driving",
       milesDriven
     );
 
-    // Update State
-    state.driveTimeContinuous += segmentTime;
-    state.driveTimeDaily += segmentTime;
-    distRemaining -= milesDriven;
+    state.driveTimeContinuous += segment;
+    state.driveTimeDaily += segment;
+
+    remaining -= milesDriven;
     milesSinceFuel += milesDriven;
 
-    // Update position (Interpolation)
-    const fraction = 1 - distRemaining / totalDist; // Approximate linear path
+    const progress = 1 - remaining / totalDistance;
     const newPos = interpolatePoint(
       state.currentLocation,
       destination,
-      fraction
+      progress
     );
-    state.currentLocation = newPos; // Roughly
+    state.currentLocation = newPos;
     state.routePath.push(newPos);
 
-    // Handle Events triggering the stop
-    if (Math.abs(segmentTime - timeToDest) < 0.001) {
-      // Arrived!
+    if (segment === timeToDest) {
       state.currentLocation = destination;
       state.currentLocationName = destName;
       break;
-    } else if (Math.abs(segmentTime - timeToBreak) < 0.001) {
-      // 30 min break required
-      takeRestBreak(state, BREAK_DURATION, "Mandatory 30m Rest");
-    } else if (
-      Math.abs(segmentTime - timeToWindowLimit) < 0.001 ||
-      Math.abs(segmentTime - timeToDailyLimit) < 0.001
-    ) {
-      // Daily limit reached
+    }
+
+    if (segment === timeToBreak) {
+      takeRestBreak(state, BREAK_DURATION, "Mandatory 30min Break");
+    } else if (segment === timeToDailyLimit || segment === timeToWindowLimit) {
       takeDailyReset(state);
-    } else if (Math.abs(segmentTime - timeToFuel) < 0.001) {
-      // Fuel Stop
-      addEvent(
-        state,
-        DutyStatus.ON_DUTY,
-        0.25,
-        "Highway Truck Stop",
-        "Refueling"
-      );
+    } else if (segment === timeToFuel) {
+      addEvent(state, DutyStatus.ON_DUTY, 0.25, "Truck Stop", "Refueling");
       state.stops.push({
         location: { name: "Fuel Stop", coords: state.currentLocation },
         type: "fuel",
@@ -265,23 +226,27 @@ const simulateDriveLeg = (
   }
 };
 
+// ---------------------------------------------------------
+// Event Helpers
+// ---------------------------------------------------------
+
 const addEvent = (
   state: SimulationState,
   status: DutyStatus,
-  durationHours: number,
+  hours: number,
   location: string,
   remarks: string,
   distance: number = 0
 ) => {
   const start = state.currentTime.getTime();
-  const end = addMinutes(state.currentTime, durationHours * 60).getTime();
+  const end = addMinutes(state.currentTime, hours * 60).getTime();
 
   state.events.push({
     id: Math.random().toString(36).substr(2, 9),
     status,
     startTime: start,
     endTime: end,
-    duration: durationHours,
+    duration: hours,
     location,
     remarks,
     distance,
@@ -290,32 +255,27 @@ const addEvent = (
   state.currentTime = new Date(end);
 
   if (status === DutyStatus.DRIVING || status === DutyStatus.ON_DUTY) {
-    if (!state.dutyWindowStart) {
-      state.dutyWindowStart = new Date(start);
-    }
-    state.onDutyTimeDaily += durationHours;
-    state.cycleUsed += durationHours;
+    if (!state.dutyWindowStart) state.dutyWindowStart = new Date(start);
+    state.onDutyTimeDaily += hours;
+    state.cycleUsed += hours;
   }
 };
 
 const takeRestBreak = (
   state: SimulationState,
-  duration: number,
+  hours: number,
   reason: string
 ) => {
-  addEvent(state, DutyStatus.OFF_DUTY, duration, "Rest Area", reason);
+  addEvent(state, DutyStatus.OFF_DUTY, hours, "Rest Area", reason);
   state.stops.push({
     location: { name: "Rest Area", coords: state.currentLocation },
     type: "rest",
   });
-  // Reset continuous drive timer if break > 30 mins
-  if (duration >= 0.5) {
-    state.driveTimeContinuous = 0;
-  }
+
+  if (hours >= 0.5) state.driveTimeContinuous = 0;
 };
 
 const handleForcedStop = (state: SimulationState) => {
-  // If we can't drive due to window or daily limit, take 10h break
   takeDailyReset(state);
 };
 
@@ -324,88 +284,83 @@ const takeDailyReset = (state: SimulationState) => {
     state,
     DutyStatus.SLEEPER,
     MIN_RESTART_BREAK,
-    "Truck Stop/Rest Area",
-    "Daily Reset (10h)"
+    "Rest Area",
+    "Daily Reset"
   );
   state.stops.push({
     location: { name: "Sleep Stop", coords: state.currentLocation },
     type: "rest",
   });
 
-  // Reset Counters
   state.driveTimeDaily = 0;
   state.driveTimeContinuous = 0;
   state.onDutyTimeDaily = 0;
   state.dutyWindowStart = null;
 };
 
-// Split continuous event stream into Daily Logs (Midnight to Midnight)
+// ---------------------------------------------------------
+// Daily Log Generation
+// ---------------------------------------------------------
+
 export const processEventsToDailyLogs = (
   events: LogEvent[],
   inputs: TripInputs
 ): DailyLog[] => {
   const logs: Record<string, DailyLog> = {};
-  let currentCycle = inputs.cycleUsed;
+  let cycle = Number(inputs.cycleUsed) || 0;
 
   events.forEach((event) => {
     const start = new Date(event.startTime);
     const end = new Date(event.endTime);
 
-    // Handle events spanning across midnight
-    let currentChunkStart = start;
-    while (currentChunkStart < end) {
-      const dateStr = format(currentChunkStart, "yyyy-MM-dd");
-      const nextMidnight = startOfDay(addHours(currentChunkStart, 24)); // Actually next day start
-      // Fix: startOfDay returns 00:00 of the given date.
-      // If currentChunkStart is 2023-10-01 23:00, startOfDay is 2023-10-01 00:00.
-      // We want 2023-10-02 00:00.
-      const dayEnd = new Date(currentChunkStart);
+    let chunkStart = start;
+    while (chunkStart < end) {
+      const date = format(chunkStart, "yyyy-MM-dd");
+      const dayEnd = new Date(chunkStart);
       dayEnd.setHours(24, 0, 0, 0);
 
       const chunkEnd = end < dayEnd ? end : dayEnd;
-      const duration = differenceInMinutes(chunkEnd, currentChunkStart) / 60;
+      const hours = differenceInMinutes(chunkEnd, chunkStart) / 60;
 
-      if (!logs[dateStr]) {
-        logs[dateStr] = {
-          date: dateStr,
+      if (!logs[date]) {
+        logs[date] = {
+          date,
           events: [],
           totalMiles: 0,
           totalHours: { OFF: 0, SB: 0, D: 0, ON: 0 },
-          cycleUsedStart: currentCycle,
-          cycleUsedEnd: currentCycle,
+          cycleUsedStart: cycle,
+          cycleUsedEnd: cycle,
           carrier: CARRIER_NAME,
           truckNumber: TRUCK_NUMBER,
         };
       }
 
-      const dailyLog = logs[dateStr];
+      const daily = logs[date];
 
-      // Add event chunk
-      dailyLog.events.push({
+      daily.events.push({
         ...event,
-        startTime: currentChunkStart.getTime(),
+        startTime: chunkStart.getTime(),
         endTime: chunkEnd.getTime(),
-        duration,
+        duration: hours,
       });
 
-      // Update Totals
-      dailyLog.totalHours[event.status] += duration;
+      daily.totalHours[event.status] += hours;
+
       if (event.distance) {
-        // Pro-rate distance for the chunk
-        const totalEventDuration =
+        const fullDuration =
           (event.endTime - event.startTime) / (1000 * 60 * 60);
-        dailyLog.totalMiles += event.distance * (duration / totalEventDuration);
+        daily.totalMiles += event.distance * (hours / fullDuration);
       }
 
       if (
-        event.status === DutyStatus.ON_DUTY ||
-        event.status === DutyStatus.DRIVING
+        event.status === DutyStatus.DRIVING ||
+        event.status === DutyStatus.ON_DUTY
       ) {
-        currentCycle += duration;
+        cycle += hours;
       }
-      dailyLog.cycleUsedEnd = currentCycle;
 
-      currentChunkStart = chunkEnd;
+      daily.cycleUsedEnd = cycle;
+      chunkStart = chunkEnd;
     }
   });
 

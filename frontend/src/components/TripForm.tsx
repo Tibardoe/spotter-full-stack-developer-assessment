@@ -23,7 +23,11 @@ export const TripForm: React.FC<Props> = ({
 }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setInputs((prev) => ({ ...prev, [name]: value }));
+
+    setInputs((prev) => ({
+      ...prev,
+      [name]: name === "cycleUsed" ? (value === "" ? 0 : Number(value)) : value,
+    }));
   };
 
   return (
@@ -79,6 +83,8 @@ export const TripForm: React.FC<Props> = ({
               name="cycleUsed"
               value={inputs.cycleUsed}
               onChange={handleChange}
+              step="1"
+              min="0"
               className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>

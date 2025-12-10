@@ -1,16 +1,13 @@
 "use client";
 
-import dynamic from "next/dynamic"; // IMPORTANT
+import dynamic from "next/dynamic";
 import { useState } from "react";
-import axios from "axios";
 import { TripForm } from "../components/TripForm";
 import { LogViewer } from "../components/LogViewer";
-// import { processEventsToDailyLogs } from "../utils/logHelper";
 import { TripInputs, SimulationResult } from "@/src/types";
 import { generateTripLogs } from "@/src/utils/logHelper";
 import { Truck, FileText, MapIcon } from "lucide-react";
 
-// Lazy load Map to avoid SSR errors
 const MapDisplay = dynamic(
   () => import("../components/MapDisplay").then((mod) => mod.MapDisplay),
   {

@@ -12,8 +12,8 @@ export interface TripInputs {
   currentLocation: string;
   pickupLocation: string;
   dropoffLocation: string;
-  cycleUsed: number; // Hours used in current 70h cycle
-  startDateTime: string; // ISO string
+  cycleUsed: number;
+  startDateTime: string;
 }
 
 export enum DutyStatus {
@@ -26,16 +26,16 @@ export enum DutyStatus {
 export interface LogEvent {
   id: string;
   status: DutyStatus;
-  startTime: number; // Timestamp
-  endTime: number; // Timestamp
-  duration: number; // Hours
+  startTime: number;
+  endTime: number;
+  duration: number;
   location: string;
   remarks: string;
-  distance?: number; // Miles driven in this segment
+  distance?: number;
 }
 
 export interface DailyLog {
-  date: string; // YYYY-MM-DD
+  date: string;
   events: LogEvent[];
   totalMiles: number;
   totalHours: {

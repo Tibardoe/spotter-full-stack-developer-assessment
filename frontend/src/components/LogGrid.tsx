@@ -8,7 +8,6 @@ interface Props {
 }
 
 export const LogGrid: React.FC<Props> = ({ log }) => {
-  // SVG Dimensions
   const width = 800;
   const height = 200;
   const padding = { top: 20, right: 40, bottom: 30, left: 100 };
@@ -16,11 +15,8 @@ export const LogGrid: React.FC<Props> = ({ log }) => {
   const graphHeight = height - padding.top - padding.bottom;
 
   const rowHeight = graphHeight / 4;
-
-  // X scale: 24 hours -> graphWidth
   const getX = (hour: number) => padding.left + (hour / 24) * graphWidth;
 
-  // Y scale: 4 Statuses
   const getY = (status: DutyStatus) => {
     const map = {
       [DutyStatus.OFF_DUTY]: 0,
@@ -31,49 +27,38 @@ export const LogGrid: React.FC<Props> = ({ log }) => {
     return padding.top + map[status] * rowHeight + rowHeight / 2;
   };
 
-  // Generate Path Data
   let pathD = "";
   let lastX = getX(0);
   let lastY = getY(
     log.events.length > 0 ? log.events[0].status : DutyStatus.OFF_DUTY
   );
 
-  // Start point
   pathD += `M ${lastX} ${lastY}`;
-
   const dayStart = startOfDay(new Date(log.date + "T00:00:00"));
 
   log.events.forEach((event) => {
     const eventStart = new Date(event.startTime);
     const eventEnd = new Date(event.endTime);
 
-    // Calculate start hour relative to day start (0-24)
     const startDiff = differenceInMinutes(eventStart, dayStart) / 60;
     const endDiff = differenceInMinutes(eventEnd, dayStart) / 60;
 
-    // Clamp to 0-24 just in case
     const xStart = getX(Math.max(0, startDiff));
     const xEnd = getX(Math.min(24, endDiff));
     const y = getY(event.status);
 
-    // Draw vertical line from previous status if changed
     if (y !== lastY) {
       pathD += ` V ${y}`;
     }
-    // Draw horizontal line for duration
-    pathD += ` H ${xEnd}`;
 
+    pathD += ` H ${xEnd}`;
     lastX = xEnd;
     lastY = y;
   });
 
-  // Finish to end of day if needed
   if (lastX < getX(24)) {
     pathD += ` H ${getX(24)}`;
   }
-
-  // Generate Remarks Markers (vertical lines at change points)
-  // We only show city names in remarks if location changed
 
   return (
     <div className="w-full overflow-x-auto">
@@ -81,8 +66,6 @@ export const LogGrid: React.FC<Props> = ({ log }) => {
         viewBox={`0 0 ${width} ${height}`}
         className="w-full min-w-[600px] border border-slate-300 bg-white"
       >
-        {/* Grid Lines */}
-        {/* Verticals for Hours */}
         {Array.from({ length: 25 }).map((_, i) => (
           <line
             key={i}
@@ -95,7 +78,6 @@ export const LogGrid: React.FC<Props> = ({ log }) => {
           />
         ))}
 
-        {/* Horizontals for Statuses */}
         {Object.keys(STATUS_LABELS).map((status, i) => (
           <g key={status}>
             <line
@@ -117,7 +99,6 @@ export const LogGrid: React.FC<Props> = ({ log }) => {
           </g>
         ))}
 
-        {/* Hour Labels */}
         {Array.from({ length: 25 }).map((_, i) => (
           <text
             key={i}
@@ -130,7 +111,6 @@ export const LogGrid: React.FC<Props> = ({ log }) => {
           </text>
         ))}
 
-        {/* The Data Path */}
         <path d={pathD} fill="none" stroke="#1e293b" strokeWidth="2" />
       </svg>
     </div>

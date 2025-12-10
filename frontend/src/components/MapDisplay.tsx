@@ -11,7 +11,6 @@ import {
 import { Coordinates, Location } from "../types";
 import L from "leaflet";
 
-// Fix for default marker icon in React-Leaflet
 // @ts-ignore
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({

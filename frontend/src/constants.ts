@@ -4,31 +4,33 @@ export const APP_NAME = "Spotter HOS Planner";
 export const CARRIER_NAME = "Spotter Logistics Inc.";
 export const TRUCK_NUMBER = "TRK-1042";
 
-// Simulation Constants
+// Simulation settings
 export const AVG_SPEED_MPH = 60;
-export const MAX_DRIVE_CONTINUOUS = 8; // Hours before 30min break
-export const MAX_DRIVE_DAILY = 11; // Hours
-export const WINDOW_DAILY = 14; // Hours
-export const MIN_RESTART_BREAK = 10; // Hours (Sleeper/Off)
+export const MAX_DRIVE_CONTINUOUS = 8; // Max hours before a 30-min break
+export const MAX_DRIVE_DAILY = 11;
+export const WINDOW_DAILY = 14;
+export const MIN_RESTART_BREAK = 10; // Off/Sleeper reset
 export const FUEL_INTERVAL_MILES = 1000;
-export const BREAK_DURATION = 0.5; // 30 mins
-export const LOAD_UNLOAD_DURATION = 1; // 1 hour
+export const BREAK_DURATION = 0.5;
+export const LOAD_UNLOAD_DURATION = 1;
 
+// Display text for duty statuses
 export const STATUS_LABELS: Record<DutyStatus, string> = {
   [DutyStatus.OFF_DUTY]: "Off Duty",
   [DutyStatus.SLEEPER]: "Sleeper Berth",
   [DutyStatus.DRIVING]: "Driving",
-  [DutyStatus.ON_DUTY]: "On Duty (Not Driving)",
+  [DutyStatus.ON_DUTY]: "On Duty",
 };
 
+// Colors used for charts and visual indicators
 export const STATUS_COLORS: Record<DutyStatus, string> = {
-  [DutyStatus.OFF_DUTY]: "#64748b", // slate-500
-  [DutyStatus.SLEEPER]: "#3b82f6", // blue-500
-  [DutyStatus.DRIVING]: "#22c55e", // green-500
-  [DutyStatus.ON_DUTY]: "#f97316", // orange-500
+  [DutyStatus.OFF_DUTY]: "#64748b",
+  [DutyStatus.SLEEPER]: "#3b82f6",
+  [DutyStatus.DRIVING]: "#22c55e",
+  [DutyStatus.ON_DUTY]: "#f97316",
 };
 
-// Mock Database of Cities for Demo purposes
+// City coordinates used for routing
 export const CITY_DB: Record<string, { lat: number; lng: number }> = {
   "New York, NY": { lat: 40.7128, lng: -74.006 },
   "Los Angeles, CA": { lat: 34.0522, lng: -118.2437 },

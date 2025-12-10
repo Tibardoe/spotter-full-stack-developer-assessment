@@ -8,6 +8,12 @@ interface Props {
 }
 
 export const LogViewer: React.FC<Props> = ({ log }) => {
+  // Helper to safely format numbers, preventing crashes if data is malformed
+  const safeFixed = (val: number | undefined | string) => {
+    const num = Number(val);
+    return isNaN(num) ? "0.00" : num.toFixed(2);
+  };
+
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 mb-6 print:border-none print:shadow-none">
       {/* Header */}
@@ -75,35 +81,37 @@ export const LogViewer: React.FC<Props> = ({ log }) => {
             <div className="flex justify-between border-b border-slate-100 py-1">
               <span>Driving Hours:</span>
               <span className="font-mono font-bold">
-                {log.totalHours[DutyStatus.DRIVING].toFixed(2)}
+                {safeFixed(log.totalHours[DutyStatus.DRIVING])}
               </span>
             </div>
             <div className="flex justify-between border-b border-slate-100 py-1">
               <span>On Duty (Not Driving):</span>
               <span className="font-mono font-bold">
-                {log.totalHours[DutyStatus.ON_DUTY].toFixed(2)}
+                {safeFixed(log.totalHours[DutyStatus.ON_DUTY].toFixed(2))}
               </span>
             </div>
             <div className="flex justify-between border-b border-slate-100 py-1">
               <span>Cycle Used (Start):</span>
               <span className="font-mono text-slate-600">
-                {log.cycleUsedStart.toFixed(2)}
+                {safeFixed(log.cycleUsedStart.toFixed(2))}
               </span>
             </div>
             <div className="flex justify-between border-b border-slate-100 py-1">
               <span>Cycle Used (End):</span>
               <span className="font-mono text-slate-600">
-                {log.cycleUsedEnd.toFixed(2)}
+                {safeFixed(log.cycleUsedEnd.toFixed(2))}
               </span>
             </div>
             <div className="col-span-2 pt-2">
               <div className="border-t-2 border-slate-800 pt-2 flex justify-between">
                 <span className="font-bold">Total Duty Hours Today:</span>
                 <span className="font-bold font-mono">
-                  {(
-                    log.totalHours[DutyStatus.DRIVING] +
-                    log.totalHours[DutyStatus.ON_DUTY]
-                  ).toFixed(2)}
+                  {safeFixed(
+                    (
+                      log.totalHours[DutyStatus.DRIVING] +
+                      log.totalHours[DutyStatus.ON_DUTY]
+                    ).toFixed(2)
+                  )}
                 </span>
               </div>
             </div>
